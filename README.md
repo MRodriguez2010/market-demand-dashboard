@@ -2,6 +2,8 @@
 
 Explore how demand varies by region, category and month. This public edition of an independent analytics dashboard includes the API, browser interface, database schema, reproducible seed generator and export code. The city names are real. Demand metrics, budgets, events and business insights are synthetic.
 
+![Synthetic demand dashboard with regional rankings and monthly trends](docs/preview.jpg)
+
 ## Run locally
 
 Use Python 3.11 or newer. From the repository root:
