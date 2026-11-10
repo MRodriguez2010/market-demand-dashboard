@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Market Demand Heatmap</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+        .header { background: linear-gradient(135deg, #1e3a5f 0%, #0ea5e9 100%); padding: 24px 32px; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 24px; font-weight: 700; }
+        .header h1 span { color: #67e8f9; }
+        .controls { display: flex; gap: 12px; align-items: center; }
+        .controls select { background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 8px 16px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+        .controls select option { background: #1e293b; color: white; }
+        .btn { padding: 8px 16px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn-pdf { background: #ef4444; color: white; }
+        .btn-pptx { background: #f97316; color: white; }
+        .btn-xlsx { background: #22c55e; color: white; }
+        .btn:hover { transform: translateY(-1px); filter: brightness(1.1); }
+        .container { max-width: 1440px; margin: 0 auto; padding: 24px; }
+        .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .kpi-card { background: linear-gradient(135deg, #1e293b, #334155); border-radius: 12px; padding: 20px; border: 1px solid #475569; }
+        .kpi-card .label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+        .kpi-card .value { font-size: 28px; font-weight: 700; }
+        .kpi-card .sub { font-size: 12px; color: #67e8f9; margin-top: 4px; }
+        .kpi-card:nth-child(1) .value { color: #67e8f9; }
+        .kpi-card:nth-child(2) .value { color: #a78bfa; }
+        .kpi-card:nth-child(3) .value { color: #34d399; }
+        .kpi-card:nth-child(4) .value { color: #fbbf24; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+        .card { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155; }
+        .card h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #f1f5f9; display: flex; align-items: center; gap: 8px; }
+        .chart-container { position: relative; height: 300px; }
+        .chart-container.tall { height: 400px; }
+        /* Heatmap grid */
+        .heatmap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+        .heat-cell { border-radius: 10px; padding: 14px; text-align: center; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; }
+        .heat-cell:hover { transform: scale(1.05); box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
+        .heat-cell .city { font-size: 14px; font-weight: 700; }
+        .heat-cell .state { font-size: 11px; opacity: 0.8; }
+        .heat-cell .score { font-size: 22px; font-weight: 800; margin: 6px 0; }
+        .heat-cell .detail { font-size: 10px; opacity: 0.7; }
+        /* Table */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .data-table th { background: #334155; color: #94a3b8; padding: 10px 12px; text-align: left; font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+        .data-table td { padding: 10px 12px; border-bottom: 1px solid #2d3748; }
+        .data-table tr:hover { background: rgba(59,130,246,0.1); }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+        .badge-opp { background: rgba(16,185,129,0.2); color: #34d399; }
+        .badge-trend { background: rgba(59,130,246,0.2); color: #60a5fa; }
+        .badge-warn { background: rgba(245,158,11,0.2); color: #fbbf24; }
+        /* Events feed */
+        .event-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #2d3748; }
+        .event-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+        .event-item .title { font-size: 13px; font-weight: 600; }
+        .event-item .meta { font-size: 11px; color: #94a3b8; }
+        .insight-card { background: rgba(59,130,246,0.05); border: 1px solid #334155; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+        .insight-card .insight-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+        .insight-card .insight-desc { font-size: 11px; color: #94a3b8; }
+        @media (max-width: 1024px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } .kpi-row { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Local Market <span>Demand Heatmap</span></h1><p>Synthetic demonstration • All market signals, budgets and events are illustrative.</p>
+        <div class="controls">
+            <select id="categoryFilter"><option value="">All Categories</option></select>
+            <button class="btn btn-pdf" onclick="exportReport('pdf')">📄 PDF</button>
+            <button class="btn btn-pptx" onclick="exportReport('pptx')">📊 PPTX</button>
+            <button class="btn btn-xlsx" onclick="exportReport('xlsx')">📗 XLSX</button>
+        </div>
+    </div>
+    <div class="container">
+        <div class="kpi-row" id="kpiRow"></div>
+
+        <div class="card" style="margin-bottom: 24px;">
+            <h3>🗺️ Demand Heatmap by Region</h3>
+            <div class="heatmap-grid" id="heatmapGrid"></div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <h3>📈 Demand Trend (12 Months)</h3>
+                <div class="chart-container"><canvas id="trendChart"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>📊 Category Demand Scores</h3>
+                <div class="chart-container"><canvas id="categoryChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="grid-3">
+            <div class="card">
+                <h3>💰 Budget by Category</h3>
+                <div class="chart-container"><canvas id="budgetChart"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>🎯 Growth Rate Distribution</h3>
+                <div class="chart-container"><canvas id="growthChart"></canvas></div>
+            </div>
+            <div class="card">
+                <h3>🔥 Top 8 Opportunities</h3>
+                <div class="chart-container"><canvas id="topChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="card">
+                <h3>🏆 Top Market Opportunities</h3>
+                <div style="max-height: 400px; overflow-y: auto;">
+                    <table class="data-table" id="topMarketsTable">
+                        <thead><tr><th>Region</th><th>Category</th><th>Score</th><th>Budget</th><th>Growth</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card">
+                <h3>💡 Market Insights</h3>
+                <div id="insightsFeed" style="max-height: 400px; overflow-y: auto;"></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 24px;">
+            <h3>📅 Recent Market Events</h3>
+            <div id="eventsFeed" style="max-height: 350px; overflow-y: auto;"></div>
+        </div>
+    </div>
+
+    <script>
+    const API = '/api/v1';
+    let charts = {};
+
+    function getHeatColor(score) {
+        if (score >= 80) return { bg: 'rgba(239,68,68,0.7)', text: '#fff' };
+        if (score >= 60) return { bg: 'rgba(249,115,22,0.6)', text: '#fff' };
+        if (score >= 40) return { bg: 'rgba(234,179,8,0.5)', text: '#1e293b' };
+        if (score >= 20) return { bg: 'rgba(34,197,94,0.4)', text: '#fff' };
+        return { bg: 'rgba(59,130,246,0.3)', text: '#e2e8f0' };
+    }
+
+    async function fetchJSON(url) {
+        const res = await fetch(url);
+        return res.json();
+    }
+
+    async function loadFilters() {
+        const cats = await fetchJSON(API + '/categories');
+        const sel = document.getElementById('categoryFilter');
+        cats.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.icon + ' ' + c.name;
+            sel.appendChild(opt);
+        });
+        sel.addEventListener('change', () => loadAll());
+    }
+
+    async function loadKPIs() {
+        const d = await fetchJSON(API + '/dashboard/overview');
+        document.getElementById('kpiRow').innerHTML = `
+            <div class="kpi-card"><div class="label">Regions Tracked</div><div class="value">${d.total_regions}</div><div class="sub">${d.total_categories} service categories</div></div>
+            <div class="kpi-card"><div class="label">Avg Demand Score</div><div class="value">${d.avg_demand_score}</div><div class="sub">Peak: ${d.max_demand_score}/100</div></div>
+            <div class="kpi-card"><div class="label">Avg Project Budget</div><div class="value">$${Number(d.avg_budget).toLocaleString()}</div><div class="sub">${Number(d.total_search_volume).toLocaleString()} total searches</div></div>
+            <div class="kpi-card"><div class="label">Avg Growth Rate</div><div class="value">${d.avg_growth_rate}%</div><div class="sub">${d.total_signals} data points</div></div>
+        `;
+    }
+
+    async function loadHeatmap() {
+        const catId = document.getElementById('categoryFilter').value;
+        const url = catId ? API + '/dashboard/heatmap?category_id=' + catId : API + '/dashboard/heatmap';
+        const data = await fetchJSON(url);
+        const grid = document.getElementById('heatmapGrid');
+        grid.innerHTML = data.map(r => {
+            const c = getHeatColor(r.demand_score);
+            return `<div class="heat-cell" style="background:${c.bg}; color:${c.text}">
+                <div class="city">${r.name}</div>
+                <div class="state">${r.state}</div>
+                <div class="score">${r.demand_score}</div>
+                <div class="detail">${r.job_postings} jobs · $${Number(r.avg_budget).toLocaleString()}</div>
+                <div class="detail">${r.growth_rate > 0 ? '↑' : '↓'} ${r.growth_rate}% growth</div>
+            </div>`;
+        }).join('');
+    }
+
+    async function loadTrendChart() {
+        const catId = document.getElementById('categoryFilter').value;
+        let url = API + '/dashboard/trends';
+        if (catId) url += '?category_id=' + catId;
+        const data = await fetchJSON(url);
+        if (charts.trend) charts.trend.destroy();
+        charts.trend = new Chart(document.getElementById('trendChart'), {
+            type: 'line',
+            data: {
+                labels: data.map(d => d.month),
+                datasets: [
+                    { label: 'Demand Score', data: data.map(d => d.demand_score), borderColor: '#67e8f9', backgroundColor: 'rgba(103,232,249,0.1)', fill: true, tension: 0.4 },
+                    { label: 'Job Postings (÷10)', data: data.map(d => Math.round(d.job_postings / 10)), borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.1)', fill: true, tension: 0.4 },
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#94a3b8' } } },
+                scales: { x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b' } }, y: { ticks: { color: '#64748b' }, grid: { color: '#1e293b' } } } }
+        });
+    }
+
+    async function loadCategoryChart() {
+        const data = await fetchJSON(API + '/dashboard/categories');
+        if (charts.category) charts.category.destroy();
+        charts.category = new Chart(document.getElementById('categoryChart'), {
+            type: 'bar',
+            data: {
+                labels: data.map(d => d.icon + ' ' + d.name),
+                datasets: [{ label: 'Demand Score', data: data.map(d => d.demand_score),
+                    backgroundColor: ['#ef4444','#f97316','#eab308','#22c55e','#0ea5e9','#8b5cf6','#ec4899','#67e8f9'],
+                    borderRadius: 6 }]
+            },
+            options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b' } }, y: { ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { display: false } } } }
+        });
+    }
+
+    async function loadBudgetChart() {
+        const data = await fetchJSON(API + '/dashboard/categories');
+        if (charts.budget) charts.budget.destroy();
+        charts.budget = new Chart(document.getElementById('budgetChart'), {
+            type: 'doughnut',
+            data: {
+                labels: data.map(d => d.name),
+                datasets: [{ data: data.map(d => d.avg_budget),
+                    backgroundColor: ['#ef4444','#f97316','#eab308','#22c55e','#0ea5e9','#8b5cf6','#ec4899','#67e8f9'],
+                    borderWidth: 0 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 10 }, padding: 8 } } } }
+        });
+    }
+
+    async function loadGrowthChart() {
+        const data = await fetchJSON(API + '/dashboard/categories');
+        if (charts.growth) charts.growth.destroy();
+        charts.growth = new Chart(document.getElementById('growthChart'), {
+            type: 'radar',
+            data: {
+                labels: data.map(d => d.name),
+                datasets: [
+                    { label: 'Demand Score', data: data.map(d => d.demand_score), borderColor: '#67e8f9', backgroundColor: 'rgba(103,232,249,0.15)', pointBackgroundColor: '#67e8f9' },
+                    { label: 'Growth Rate', data: data.map(d => Math.max(0, d.growth_rate * 5)), borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.15)', pointBackgroundColor: '#34d399' },
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false,
+                scales: { r: { grid: { color: '#334155' }, pointLabels: { color: '#94a3b8', font: { size: 9 } }, ticks: { display: false } } },
+                plugins: { legend: { labels: { color: '#94a3b8' } } } }
+        });
+    }
+
+    async function loadTopChart() {
+        const data = await fetchJSON(API + '/dashboard/top-markets?limit=8');
+        if (charts.top) charts.top.destroy();
+        charts.top = new Chart(document.getElementById('topChart'), {
+            type: 'bar',
+            data: {
+                labels: data.map(d => d.region + ' - ' + d.category.split(' ')[0]),
+                datasets: [{ label: 'Demand Score', data: data.map(d => d.demand_score),
+                    backgroundColor: data.map((_, i) => `hsla(${i * 45}, 70%, 60%, 0.8)`), borderRadius: 4 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                scales: { x: { ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 45 }, grid: { display: false } }, y: { ticks: { color: '#64748b' }, grid: { color: '#1e293b' } } } }
+        });
+    }
+
+    async function loadTopMarketsTable() {
+        const data = await fetchJSON(API + '/dashboard/top-markets?limit=15');
+        const tbody = document.querySelector('#topMarketsTable tbody');
+        tbody.innerHTML = data.map(d => `<tr>
+            <td><strong>${d.region}</strong>, ${d.state}</td>
+            <td>${d.category}</td>
+            <td><span style="color: ${d.demand_score >= 60 ? '#ef4444' : d.demand_score >= 40 ? '#eab308' : '#22c55e'}">${d.demand_score}</span></td>
+            <td>$${Number(d.avg_budget).toLocaleString()}</td>
+            <td style="color: ${d.growth_rate >= 0 ? '#34d399' : '#ef4444'}">${d.growth_rate > 0 ? '+' : ''}${d.growth_rate}%</td>
+        </tr>`).join('');
+    }
+
+    async function loadInsights() {
+        const data = await fetchJSON(API + '/dashboard/insights');
+        const feed = document.getElementById('insightsFeed');
+        feed.innerHTML = data.map(d => {
+            const cls = d.type === 'opportunity' ? 'badge-opp' : d.type === 'trend' ? 'badge-trend' : 'badge-warn';
+            return `<div class="insight-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                    <span class="insight-title">${d.title}</span>
+                    <span class="badge ${cls}">${d.type}</span>
+                </div>
+                <div class="insight-desc">${d.description}</div>
+                <div style="font-size:10px;color:#64748b;margin-top:4px;">${d.region} · ${d.category} · Relevance: ${d.relevance_score}/10</div>
+            </div>`;
+        }).join('');
+    }
+
+    async function loadEvents() {
+        const data = await fetchJSON(API + '/dashboard/events');
+        const feed = document.getElementById('eventsFeed');
+        const colors = { conference: '#3b82f6', hiring_surge: '#22c55e', funding: '#a78bfa', meetup: '#f97316' };
+        feed.innerHTML = data.map(d => `<div class="event-item">
+            <div class="event-dot" style="background: ${colors[d.event_type] || '#64748b'}"></div>
+            <div>
+                <div class="title">${d.title}</div>
+                <div class="meta">${d.region} · ${d.date} · Impact: ${d.impact_score}/10</div>
+            </div>
+        </div>`).join('');
+    }
+
+    function exportReport(fmt) {
+        fetch(API + '/reports/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ format: fmt })
+        }).then(r => r.blob()).then(blob => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'market_heatmap_report.' + fmt;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+    }
+
+    async function loadAll() {
+        await Promise.all([
+            loadKPIs(), loadHeatmap(), loadTrendChart(), loadCategoryChart(),
+            loadBudgetChart(), loadGrowthChart(), loadTopChart(),
+            loadTopMarketsTable(), loadInsights(), loadEvents()
+        ]);
+    }
+
+    loadFilters().then(() => loadAll());
+    </script>
+</body>
+</html>
